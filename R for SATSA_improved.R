@@ -7,6 +7,8 @@ library(vroom)
 library(visdat)
 library(here)
 library(visdat)
+library(janitor)
+install.packages("janitor")
 
 library(readr)
 
@@ -19,13 +21,9 @@ View(SATSA_datascience)
 #using visdat package to explore the data
 vis_dat(SATSA_datascience)
 
-#creating a function to make sure outlier sleep durations will be set to NA
-out_of_bounds <- function(x){ifelse(x<2|x>14, NA, x)}
-
-
 #Selected only the sleep variables of interest, created new dataset
 SATSA<-SATSA_datascience %>% select(ID, AGE, ASLEEPN_Src, ASLEEPM_Src, ASLEEP1:ASLEEP12,
-                                    ZSLEEPNrc, ZSLEEPMrc, BSLEEP1:BSLEEP12, ZSLEEP1:ZSLEEP12)
+                                    ZSLEEPNrc, ZSLEEPMrc, ZSLEEP1:ZSLEEP12)
                                     
                                   
 #create a function to calculate hours slept (duration) from
@@ -57,12 +55,16 @@ View(SATSA)
 
 #VISUALIZE DATA/ formal check of data
 SATSA %>% ggplot(aes(x = SATSA$AGE, y = SATSA$SleepDurationA)) + geom_point()
-range(SATSA$SleepDurationA)     
-#See some outliers, will create new dataset setting individuals below
-#two hours of sleep and above 15 hours of sleep to NA
-   
+SATSA %>% ggplot(aes(x = SATSA$AGE, y = SATSA$SleepDurationZ)) + geom_point()
+ 
+
+#checking data
 range(SATSA$SleepDurationA, na.rm=T)     
-range(SATSA$SleepDurationZ, na.rm=T)     
+range(SATSA$SleepDurationZ, na.rm=T)   
+
+#See some outliers, will create new dataset setting individuals below
+#two hours of sleep and above 15 hours of sleep to NA (according to national
+#sleep foundation recommendations for what counts as healthy sleep duration)
 
 SATSA_cleaned <- SATSA %>% mutate(
   SleepDurationA = ifelse(SleepDurationA >= 2 & SleepDurationA < 15, SleepDurationA, NA),
@@ -73,41 +75,57 @@ range(SATSA_cleaned$SleepDurationA, na.rm = T)
 range(SATSA_cleaned$SleepDurationZ, na.rm = T)
 #now the range for SleepDurationA is 5.3 and 12 and SleepDurationZ is 4.3 and 11.3
 SATSA_cleaned %>% ggplot(aes(x = AGE, y = SleepDurationA)) + geom_point()
+SATSA_cleaned %>% ggplot(aes(x = AGE, y = SleepDurationZ)) + geom_point()
+#appears that people are sleeping more hours in the second wave (Z) compared to first wave (A)
 
+
+#another way to visualize data
 SATSA_cleaned %>% ggplot(aes(x = SleepDurationA)) + geom_histogram() 
 SATSA_cleaned %>% ggplot(aes(x = SleepDurationZ)) + geom_histogram() 
 
 
-#For Loop
-graph <- function(df) {
-  p <- ggplot(df, aes(x = AGE, y = SleepDurationZ)) + 
-    geom_bar(stat="identity", position="dodge")+
-    ggtitle(df$AGE) + theme_minimal()
-  print(p)
-}
+#For Loop (graphing to visualize data by age group for sleep duration wave 1)
 
-graph<-function(i){
-  p <-ggplot(i, aes(x=SleepDurationA)) + geom_histogram()
+graphA<-function(i){
+  p <-ggplot(i, aes(x=SleepDurationA)) + geom_histogram()+
+    ggtitle(i$AGE)
   print(p)
 }
 
 
 SATSA_agegroup <-split(SATSA_cleaned, as.factor(SATSA_cleaned$AGE))
 for(x in SATSA_agegroup) {
-  graph(x)
+  graphA(x)
   
 }
+
+#For Loop (graphing to visualize data by age group for sleep duration wave 2)
+graphZ<-function(q){
+  z <-ggplot(q, aes(x=SleepDurationZ)) + geom_histogram()+
+    ggtitle(q$AGE)
+  print(z)
+}
+
+
+SATSA_agegroup <-split(SATSA_cleaned, as.factor(SATSA_cleaned$AGE))
+for(h in SATSA_agegroup) {
+  graphZ(h)
+  
+}
+
+
 
 library(dplyr)
 range(SATSA$ASLEEP1, na.rm=T)
 
+a1<-c(5:16, 19:30)
+as.character(a1)
 
 #automation of recoding rather than if then statements
-sATSA_RC<-SATSA %>%
+SATSA_RC<-SATSA %>%
   mutate_at(5:16, recode, '2'='1', '3'='1', '4'='1','5'='1',  '1'='0') %>%
-  mutate_at(19:30, recode, '2'='1', '3'='1', '4'='1','5'='1', '1'='0') %>%
-  mutate_at(31:42, recode, '2'='1', '3'='1', '4'='1', '5'='1','1'='0')
-range(sATSA_RC$ASLEEP1, na.rm=T)
+  mutate_at(19:30, recode, '2'='1', '3'='1', '4'='1','5'='1', '1'='0')
+range(SATSA_RC$ASLEEP1, na.rm=T)
 
 #Previous code example
 #if ASLEEP3=1 then ASLEEP3_h=0;
@@ -141,8 +159,10 @@ range(sATSA_RC$ASLEEP1, na.rm=T)
 #if BSLEEP10=1 then BSLEEP10_h=0;
 #if BSLEEP10 ge 2 then BSLEEP10_h=1;
 
-
-
+#having clean names and same naming conventions (lettercase etc.) will
+#allow for efficient merging with other datasets
+SATSA_clean_names<-SATSA_RC%>%
+  janitor::clean_names()
 
 
 
