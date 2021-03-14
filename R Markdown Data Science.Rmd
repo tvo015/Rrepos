@@ -1,0 +1,339 @@
+---
+title: "R Markdown Data Science Final Project"
+author: "Tina Vo"
+date: "3/14/2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true 
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+This is an R Markdown report for my data science final project. This will provide information on the SATSA_improved script that is uploaded into my github repository.
+
+The materials for this R Markdown are found in [click here](https://github.com/tvo015/Rrepos). Or URL: <https://github.com/tvo015/Rrepos>
+
+Overview:
+
+  * This report will detail a previous workflow and steps done to improve that workflow using R to improve efficiency, fidelity, and reproducibility of my project. Originally, presented in the workflow critique assignment, I mentioned working with nine different datasets but upon more assessment, I realized that each dataset had similar issues that would greatly benefit from the same techniques (eg. automation, iterations, same naming conventions). Therefore, I have decided to improve my workflow in one dataset with the assumption that the same techniques will be applied to the remaining eight datasets (outside of this course assignment). As stated in my workflow self-critique assignment, I believe that my weakest link when it comes to data workflow is efficiency. Throughout this document, I will provide an explanation of how efficiency has increased as well as increasing the fidelity of my data.
+
+
+### STEP 1: Importing in the dataset
+This dataset is for my Swedish Adoption Twin Study of Aging (SATSA) study. Note: I have created a completely fake dataset for the purposes of this final project. The dataset is currently in a csv format. I first start by `importing` in my dataset to R and viewing the dataset. 
+
+```{r, warning=FALSE, message=FALSE, code_folding=show}
+#Load packages
+library(tidyverse)
+library(tidyverse)
+library(vroom)
+library(visdat)
+library(here)
+library(visdat)
+library(janitor)
+library(readr)
+
+SATSA_datascience <- read_csv("~/GitHub/Rrepos/SATSA_datascience.csv")
+View(SATSA_datascience)
+```
+
+### STEP 2: Attempt at understanding/visualizing the data
+
+This next step uses `vis_dat` to view this data set. We learned in class that visualization often times will yield additional information that we wouldn't see if we just did not check or just assumed that the data is how we expect it to be. 
+
+This code is what was previously done to attempt at visualizing the data in `SAS`: 
+
+**PROC CONTENTS DATA=SATSAs VARNUM; RUN;
+
+The issue with the above code is that it only prints out the variable names within the file. While that is good, it does not provide any insight on the structure of the data or any information regarding the actual data contained in the dataset. 
+
+This code is what was done in `R` to improve on the previous SAS code: 
+```{r, warning=FALSE, message=FALSE, code_folding=show}
+vis_dat(SATSA_datascience)
+```
+
+While this is quite hard to understand, it does provide some information on the data (e.g. which variables are string, which are numeric, how many observations are in each variable). 
+
+### STEP 3: Selecting only the variables of interest
+
+This step is crucial as the datafiles that I often work with have a very large number of variables. Since the data for SATSA was not originally collected for the purposes of my sleep research, I have to go through and condense down the dataset to just the variables of interest. This is an improvement on my current workflow because I never even did this. I usually just worked with the very large dataset with over a hundred variables in there. The efficiency of my work was oftentimes compromised because I had to spend so much time scrolling through to find just the variables that I needed. 
+
+```{r, warning=FALSE, message=FALSE, code_folding=show}
+SATSA<-SATSA_datascience %>% select(ID, AGE, ASLEEPN_Src, ASLEEPM_Src, ASLEEP1:ASLEEP12,
+                                    ZSLEEPNrc, ZSLEEPMrc, ZSLEEP1:ZSLEEP12)
+```
+Now I have a dataset called SATSA which just has the ID variable, age variable, and sleep variables for the first wave (wave A) and the second wave (wave Z). This also increases efficiency since I no longer need to manually go through and delete out variables that I didn't need later on. Previously, I would have deleted variables in SPSS but now that I am selecting these variables, it is more of an automated process while reducing human error (e.g. I could accidentally miss a variable if I typed out ASLEEP1, ASLEEP2, ASLEEP3 etc. but now that I am doing ASLEEP1:ASLEEP12, I know that all of those variables in between will for sure be selected). Therefore, efficiency is increased but fidelity is increased as well. 
+
+### STEP 4: Creating a Function
+
+This step creates a function for calculating sleep duration. How the data is currently set up is that I have an individual's waketime and their bedtime and would have to calculate total sleep duration from those two variables. 
+
+Previously, in my SAS script, I had to convert the variables from string to numeric using the time10 format, rename the variables, and then calculate sleep duration for each individual wave through first converting the time to seconds. 
+
+`Previous SAS Code`:
+
+/*set string to numeric for ASLEEP and ZSLEEP, BSLEEP already numeric*/
+title 'String to Numeric';
+data SATSA_num; set SATSAs;
+Abedtime= input (ASLEEPN_Src, time10.);
+Awaketime= input (ASLEEPM_Src, time10.);
+Zbedtime= input (ZSLEEPNrc, time10.);
+Zwaketime= input (ZSLEEPMrc, time10.);
+run;
+
+proc contents data= SATSA_num;
+run;
+
+title 'Renaming BSLEEP, convert to seconds';
+/*renaming B sleep variables to be consistent with A and Z sleep items*/
+data SATSA_num1; set SATSA_num;
+Bbedtime=BSLEEPN_T;
+Bwaketime=BSLEEPM_T;
+if Bbedtime=0 then Bbedtime=86400;
+run;
+
+title 'Calculating sleep duration based on bedtime and waketime';
+/*calculate sleep duration based on waketime and bedtime*/
+data SATSA_num2; set SATSA_num1;
+A_hrs_slept = mod(24+(Awaketime-Abedtime)/3600,24);
+B_hrs_slept = mod(24+(Bwaketime-Bbedtime)/3600,24);
+Z_hrs_slept = mod(24+(Zwaketime-Zbedtime)/3600,24);
+run;
+
+title 'frequency check for sleep duration';
+proc freq data=SATSA_num2;
+tables A_hrs_slept B_hrs_slept Z_hrs_slept;
+run;
+
+`Improved R Code`
+This creates a function that will automatically calculate sleep duration based on the logic provided and return just the duration. When applied to the two wave A variables (bedtime and waketime), it yields SleepDurationA. When applied to the two wave Z variables (bedtime and waketime), it yields SleepDurationZ. This improves efficiency because previously (seen above), I would have had to type out the equation for each individual wave that I wanted to calculate sleep duration for. Typing the equation out each time makes room for human error (e.g. I could mistype 360 instead of 3600 and not notice and SAS would not give me an error or a warning because it would think that I intended to do that). With the new function, I am able to just make sure that I have correctly typed out the equation correctly one time and then can use the function as often as I need with the assurance that it would be calculated correctly. 
+
+```{r, warning=FALSE, message=FALSE}
+HRS_SLEPT <- function(a, b) {
+  duration <- (b-a)+24
+  return(duration)
+  
+}
+SATSA$SleepDurationA<-HRS_SLEPT(SATSA$ASLEEPN_Src, SATSA$ASLEEPM_Src)
+SATSA$SleepDurationZ<-HRS_SLEPT(SATSA$ZSLEEPNrc, SATSA$ZSLEEPMrc)
+View(SATSA)
+```
+
+### STEP 5: Visualizing the data/Formally checking the data
+While I did check means and sample size (N's) of my data quiet often with my previous work flow, I never plotted the data to visually see what the data looks like. It is good to see the data through graphs because then you can clearly see any outliers. 
+
+`Previous SAS Code`
+title 'Means';
+PROC MEANS DATA=SATSA_3;
+VARS;
+RUN;
+
+`Improved R Code to Visualize and formally check the data`
+```{r, warning=FALSE, message=FALSE}
+SATSA %>% ggplot(aes(x = SATSA$AGE, y = SATSA$SleepDurationA)) + geom_point()
+SATSA %>% ggplot(aes(x = SATSA$AGE, y = SATSA$SleepDurationZ)) + geom_point()
+ 
+
+#checking data
+range(SATSA$SleepDurationA, na.rm=T)     
+range(SATSA$SleepDurationZ, na.rm=T)   
+
+
+```
+
+With this, I am able to see that there are some outliers in my two waves of sleep duration.Not only can I see them in the graphs, but I also did a formal check through checking their range. Based on this information, I will create a new dataset to set individuals below two hours of sleep and above 15 hours of sleep to NA. With my previous workflow, I would only have caught the outliers if I was super careful in looking at the output of the means. 
+
+```{r, warning=FALSE, message=FALSE}
+SATSA_cleaned <- SATSA %>% mutate(
+  SleepDurationA = ifelse(SleepDurationA >= 2 & SleepDurationA < 15, SleepDurationA, NA),
+  SleepDurationZ = ifelse(SleepDurationZ >= 2 & SleepDurationZ < 15, SleepDurationZ, NA)
+)
+
+range(SATSA_cleaned$SleepDurationA, na.rm = T)
+range(SATSA_cleaned$SleepDurationZ, na.rm = T)
+```
+Now the range for SleepDurationA is 5.3 and 12 and SleepDurationZ is 4.3 and 11.3.
+
+### STEP 6: Re-visualizing the data
+Now lets look at the data again.
+```{r, warning=FALSE, message=FALSE}
+SATSA_cleaned %>% ggplot(aes(x = AGE, y = SleepDurationA)) + geom_point()
+SATSA_cleaned %>% ggplot(aes(x = AGE, y = SleepDurationZ)) + geom_point()
+```
+
+It appears that people are sleeping more hours in the second wave (Z) compared to first wave (A). 
+
+Another way to look at the data: 
+```{r, warning=FALSE, message=FALSE}
+SATSA_cleaned %>% ggplot(aes(x = SleepDurationA)) + geom_histogram() 
+SATSA_cleaned %>% ggplot(aes(x = SleepDurationZ)) + geom_histogram() 
+```
+
+This is an improvement to my previous workflow because previously I had not graphed my data to visualize it. Visualizing it through scatterplots or histograms improves the ability to potentially catch any errors or any outliers. In addition, it also yields additional interpretation and understanding of the data. 
+
+### STEP 7: For Loop (graphing to visualize sleep duration by age group)
+Additionally, what might be important to assess is how sleep duration may look by certain age group bins. This for loop is able to increase efficiency by graphing all age groups rather than me having to graph each age group individually.
+
+```{r, warning=FALSE, message=FALSE}
+graphA<-function(i){
+  p <-ggplot(i, aes(x=SleepDurationA)) + geom_histogram()+
+    ggtitle(i$AGE)
+  print(p)
+}
+
+
+SATSA_agegroup <-split(SATSA_cleaned, as.factor(SATSA_cleaned$AGE))
+for(x in SATSA_agegroup) {
+  graphA(x)
+  
+}
+```
+
+Repeated for wave Z
+```{r, warning=FALSE, message=FALSE}
+graphZ<-function(q){
+  z <-ggplot(q, aes(x=SleepDurationZ)) + geom_histogram()+
+    ggtitle(q$AGE)
+  print(z)
+}
+
+
+SATSA_agegroup <-split(SATSA_cleaned, as.factor(SATSA_cleaned$AGE))
+for(h in SATSA_agegroup) {
+  graphZ(h)
+  
+}
+```
+
+Using for loops to automate this graphing process greatly improves my previous workflow. Previously, in order to do this, I would have either had to graph each plot for each age group individually through chunks of code (roughly 100's of lines of code with room for human error in typing in SAS) or graphed using drop down menus in SPSS. Doing so through for loops in R leaves syntax for other collaborators to have a document of what was done thereby increasing potential reproducibility of my code and data to generate the same exact graphs.
+Additionally, this decreases errors and increases efficiency (I can graph many in just around 10 lines of code as opposed to writing hundreds of lines of code). 
+
+### STEP 8: Automation (recoding)
+
+The next step deals with increasing efficiency and fidelity through improving ways of recoding data. The sleep variables originally are on a 1-5 scale but need to be converted to a 0-1 scale for the purposes of analyses (0=no endorsement, 1=some endorsement). 
+
+`Previously done in SAS`
+
+#if ASLEEP3=1 then ASLEEP3_h=0;
+#if ASLEEP3 ge 2 then ASLEEP3_h=1;
+#if ASLEEP1=1 then ASLEEP1_h=0;
+#if ASLEEP1 ge 2 then ASLEEP1_h=1;
+#if ASLEEP4=1 then ASLEEP4_h=0;
+#if ASLEEP4 ge 2 then ASLEEP4_h=1;
+#if ASLEEP8=1 then ASLEEP8_h=0;
+#if ASLEEP8 ge 2 then ASLEEP8_h=1;
+#if ASLEEP10=1 then ASLEEP10_h=0;
+#if ASLEEP10 ge 2 then ASLEEP10_h=1;
+#if ZSLEEP1=1 then ZSLEEP1_h=0;
+#if ZSLEEP1 ge 2 then ZSLEEP1_h=1;
+#if ZSLEEP3=1 then ZSLEEP3_h=0;
+#if ZSLEEP3 ge 2 then ZSLEEP3_h=1;
+#if ZSLEEP4=1 then ZSLEEP4_h=0;
+#if ZSLEEP4 ge 2 then ZSLEEP4_h=1;
+#if ZSLEEP8=1 then ZSLEEP8_h=0;
+#if ZSLEEP8 ge 2 then ZSLEEP8_h=1;
+#if ZSLEEP10=1 then ZSLEEP10_h=0;
+#if ZSLEEP10 ge 2 then ZSLEEP10_h=1;
+
+Note: The example shown for SAS above has already been improved. Previously, it was even more clunky (ex: if ASLEEP 3=1 then ASLEEP3_h=0, if ASLEEP3=2 then ASLEEP3_h=1, if ASLEEP3=3 then ASLEEP3_h=1, if ASLEEP3_h=4 then ASLEEP3_h=1, if ASLEEP3_h=5 then ASLEEP3_h=1). Previously, I would take roughly five lines to recode just one variable. Learning the "ge" to mean greater than meant that I could reduce the five lines into two lines now (seen in SAS example code above). 
+
+I could use automation to further reduce the lines of code even further (shown in R)
+
+`Improved R Code`
+```{r, warning=FALSE, message=FALSE}
+
+library(dplyr)
+range(SATSA$ASLEEP1, na.rm=T)
+
+a1<-c(5:16, 19:30)
+as.character(a1)
+
+#automation of recoding rather than if then statements
+SATSA_RC<-SATSA %>%
+  mutate_at(5:16, recode, '2'='1', '3'='1', '4'='1','5'='1',  '1'='0') %>%
+  mutate_at(19:30, recode, '2'='1', '3'='1', '4'='1','5'='1', '1'='0')
+range(SATSA_RC$ASLEEP1, na.rm=T)
+
+```
+
+With using `mutate_at`, I am able to reduce my recoding code down to just three lines. This greatly increases effiency through saving me time from typing out each if-then statement while also ensuring that fidelity of the data is not compromised since it does not leave much room for human error since I do not have to individually type out each recoding. Additionally, a formal check implemented through looking at the range of the recoded variable ensures that the minimum is 0 and the maximum is 1 as intended with the recoding. 
+
+### STEP 9: Addressing naming conventions
+
+As mentioned previously, I need to merge multiple datasets together later on. One issue that I have run into is that my naming conventions are not comparable, making merges quite difficult. My previous workflow included renaming variables by hand at the end of all data recodings. This gets quite tedious and I could accidentally misspell something and end up renaming a variable incorrectly which would affect my merging of datasets later on.
+
+`Previously done in SAS`
+
+/*create datafile with the naming conventions*/
+data SATSA_sleep_names; set SATSA_sleepcat3;
+slp_dur_fu16=A_hrs_slept;
+slp_dur_fu18=B_hrs_slept;
+slp_dur_fu17=Z_hrs_slept;
+slpcat_fu16=slp_ave_cat1;
+slpcat_fu18=slp_ave_cat2;
+slpcat_fu17=slp_ave_cat3;
+latency_fu16=ASLEEP5_h;
+latency_fu18=BSLEEP5_h;
+latency_fu17=ZSLEEP5_h;
+RClatency_fu16=ASLEEP5_RC;
+RClatency_fu18=BSLEEP5_RC;
+RClatency_fu17=ZSLEEP5_RC;
+latency_in=E60;
+slpRX_in=SLEEPRX;
+slpRX_fu1=IPT1SLEEPRX;
+slpRX_fu2=VSLEEPRX;
+slpRX_fu3=QSLEEPRX;
+slpRX_fu4=GSLEEPRX;
+slpRX_fu5=XSLEEPRX;
+slpRX_fu6=HSLEEPRX;
+slpRX_fu7=FSLEEPRX;
+slpRX_fu8=RSLEEPRX;
+slpRX_fu9=SSLEEPRX;
+slpRX_fu10=JSLEEPRX;
+slpRX_fu11=USLEEPRX;
+slpRX_fu13=WSLEEPRX;
+wake_earlyfu16=ASLEEP1_h;
+wake_earlyfu18=BSLEEP1_h;
+wake_earlyfu17=ZSLEEP1_h;
+RCwake_earlyfu16=ASLEEP1_RC;
+RCwake_earlyfu18=BSLEEP1_RC;
+RCwake_earlyfu17=ZSLEEP1_RC;
+
+wake_nightfu16=ASLEEP4_h;
+wake_nightfu18=BSLEEP4_h;
+wake_nightfu17=ZSLEEP4_h;
+RCwake_nightfu16=ASLEEP4_RC;
+RCwake_nightfu18=BSLEEP4_RC;
+RCwake_nightfu17=ZSLEEP4_RC;
+
+snorefu16=ASLEEP10_h;
+snorefu18=BSLEEP10_h;
+snorefu17=ZSLEEP10_h;
+RCsnorefu16=ASLEEP10_RC;
+RCsnorefu18=BSLEEP10_RC;
+RCsnorefu17=ZSLEEP10_RC;
+
+restless_in=M6_h;
+restless_fu2=VM6_h;
+restless_fu3=QM6_h;
+restless_fu4=GM6_h;
+zygos=PRZYGUP;
+study=1;
+run;
+
+Note: as you can see, it requires a lot of lines of code to rename everything and even then, the naming conventions or the naming styles aren't all consistent (some are snake case, some are upper and lowercase, some have underscores while other variables do not)
+
+`Improved R Code`
+```{r, warning=FALSE, message=FALSE}
+SATSA_clean_names<-SATSA_RC%>%
+  janitor::clean_names()
+```
+
+Simply just using the `clean names` in janitor will automatically apply the same naming convention to all variables within my dataset without having the need to type out each individual variable. This greatly improves efficiency. Additionally, fidelity is improved because there is no room for error. Lastly, reproducibility and sharing is also impacted positively because now individuals can easily merge my datasets together since naming conventions will all be the same. I can also easily share my data because the variable names will be understandable to other people.
+
+### Ending Comments
+Overall, through this class I was able to learn ways to improve my efficiency, fidelity, and sharing/reproducibility of my data. Efficiency was improved through the reduction of repetitive code (if-then statements) by using mutate_at. A custom function to calculate sleep duration and also a custom function to generate graphs by age group (through a for loop) greatly improved efficiency and fidelity of the data by allowing visualization from plotted graphs to catch any errors (data checks) but also to further understand the data. Additionally, the implementation of checking the range of the data allowed for more frequent data checks as well. Improved readibility of the code was done through adapting a consistent naming convention which will also allow for easy merging of datasets later on. Lastly, improved documentation of the project is shown through this R markdown report. Previous documentation of data steps was just done directly in the SAS script through comments but implementing a dynamic document like R markdown improves understanding of the research project and also sharing/reproducibility of the project since each code chunk was well-documented. Documentation of the project was also improved upon through pushing and committing changes to github. 
